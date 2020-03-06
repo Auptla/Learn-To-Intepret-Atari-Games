@@ -53,6 +53,8 @@ parser.add_argument('--mask', action='store_true', help=' If yes, use saliency t
 parser.add_argument('--heatmap', action='store_true', help=' If yes, visualize saliency as heatmap')
 parser.add_argument('--channel', type=str, default='', help='0 or 1')
 parser.add_argument('--original', action='store_true', help='')
+parser.add_argument('--attribution-method', type=str, default='', help='IG, SG or other attribute method')
+parser.add_argument('--gaussian-noise', action='store_true', help='add gaussian noise to the saliency map')
 
 # Setup
 args = parser.parse_args()
@@ -73,6 +75,7 @@ else:
 env = Env(args)
 env.eval()
 img_h, img_w, _ = env.ale.getScreenRGB()[:, :, ::-1].shape
+
 
 # Agent
 PRETRAINED_MODEL = './results/'+args.game+'_'+args.model_type+'_model.pth'
@@ -116,13 +119,20 @@ if args.original:
 # Test performance
 done = True
 
+if(args.attribution_method):
+    print("The attribute method is:", args.attribution_method)
+print("No attribution specified!")
+
 while True:
   if done:
     state, reward_sum, done = env.reset(), 0, False
 
-  print(state)
+
+
   action = dqn.act_e_greedy(state)  # Choose an action ε-greedily
   saliency_0, saliency_1 = dqn.get_saliency_masks(state) 
+
+
   #print('raw state shape is {}'.format(state.shape)) # (4,84,84)
   #print('saliency shape is {}'.format(saliency.shape)) # (4,84,84)
   if args.max:
@@ -154,6 +164,10 @@ while True:
   
   saliency_0 = cv2.resize(saliency_0, (img_w,img_h), cv2.INTER_CUBIC) #INTER_LINEAR, LANCZOS4: 8X8
   saliency_1 = cv2.resize(saliency_1, (img_w,img_h), cv2.INTER_CUBIC) #INTER_LINEAR, LANCZOS4: 8X8
+
+  if(args.gaussian_noise):
+      noise = 0.01 * (np.max(saliency_0) - np.min(saliency_0)) * np.random.standard_normal(size=saliency_0.shape) 
+      saliency_0 += noise
   
   if args.heatmap:
     #(210,160,3)
@@ -179,7 +193,7 @@ while True:
     saliency_0 = np.expand_dims(saliency_0, axis=2)    #(210, 160, 1)
     saliency_1 = np.expand_dims(saliency_1, axis=2)    #(210, 160, 1)
     if args.mask:
-        saliency_0 = ((saliency_0>0.11) * state).astype(np.uint8)
+        saliency_0 = ((saliency_0>0.1) * state).astype(np.uint8)
         saliency_1 = ((saliency_1>0.1) * state).astype(np.uint8)
     else:
         saliency_0 = (saliency_0*1.5 * state).astype(np.uint8)
