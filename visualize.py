@@ -130,85 +130,65 @@ while True:
 
 
   action = dqn.act_e_greedy(state)  # Choose an action ε-greedily
-  saliency_0, saliency_1 = dqn.get_saliency_masks(state) 
+  saliency = dqn.get_saliency(state)
+
 
 
   #print('raw state shape is {}'.format(state.shape)) # (4,84,84)
   #print('saliency shape is {}'.format(saliency.shape)) # (4,84,84)
   if args.max:
-    saliency_0 = torch.max(saliency_0, dim=0)[0]
+    saliency = torch.max(saliency, dim=0)[0]
     #print(saliency_0.max()) # 7.7252e-08
-    saliency_1 = torch.max(saliency_1, dim=0)[0]
     #print('saliency shape is {}'.format(saliency.shape)) # (84, 84)
   else:
-    saliency_0 = saliency_0[-1]
-    saliency_1 = saliency_1[-1]
+    saliency = saliency[-1]
   
   state = env.ale.getScreenRGB()[:, :, ::-1].astype(np.uint8)
   # ===========normalize saliency========
-  saliency_0 = torch.abs(saliency_0)
-  saliency_0 -= saliency_0.min()
+  saliency = torch.abs(saliency)
+  saliency -= saliency.min()
   
   #print(saliency_0.max()) # 1.5421e-07, 0.
-  saliency_0 /= torch.clamp(torch.max(saliency_0), min=1e-8)
-  saliency_0[saliency_0<args.saliency_thresh] = 0
-  saliency_0 = saliency_0.data.cpu().numpy().astype(np.float32)
+  saliency /= torch.clamp(torch.max(saliency), min=1e-8)
+  saliency[saliency<args.saliency_thresh] = 0
+  saliency = saliency.data.cpu().numpy().astype(np.float32)
   
-  saliency_1 = torch.abs(saliency_1)
-  
-  saliency_1 -= saliency_1.min()
-  
-  saliency_1 /= torch.clamp(torch.max(saliency_1), min=1e-8)
-  saliency_1[saliency_1<args.saliency_thresh] = 0
-  saliency_1 = saliency_1.data.cpu().numpy().astype(np.float32)
-  
-  saliency_0 = cv2.resize(saliency_0, (img_w,img_h), cv2.INTER_CUBIC) #INTER_LINEAR, LANCZOS4: 8X8
-  saliency_1 = cv2.resize(saliency_1, (img_w,img_h), cv2.INTER_CUBIC) #INTER_LINEAR, LANCZOS4: 8X8
+  saliency = cv2.resize(saliency, (img_w,img_h), cv2.INTER_CUBIC) #INTER_LINEAR, LANCZOS4: 8X8
+
 
   if(args.gaussian_noise):
-      noise = 0.01 * (np.max(saliency_0) - np.min(saliency_0)) * np.random.standard_normal(size=saliency_0.shape) 
-      saliency_0 += noise
+      noise = 0.01 * (np.max(saliency) - np.min(saliency)) * np.random.standard_normal(size=saliency.shape) 
+      saliency += noise
   
   if args.heatmap:
     #(210,160,3)
     temp = np.zeros((img_h, img_w, 3),'float32')
-    temp[:,:, 2] = saliency_0
-    saliency_0 = (temp*255).astype(np.uint8)
-    saliency_0 += (saliency_0[:,:,2]==0)[:,:,np.newaxis] * state
-    
-    temp = np.zeros((img_h, img_w, 3),'float32')
-    temp[:,:, 2] = saliency_1
-    saliency_1 = (temp*255).astype(np.uint8)
-    saliency_1 += (saliency_1[:,:,2]==0)[:,:,np.newaxis] * state
+    temp[:,:, 2] = saliency
+    saliency = (temp*255).astype(np.uint8)
+    saliency += (saliency[:,:,2]==0)[:,:,np.newaxis] * state
     del temp
   
   elif not args.multiply:
-    saliency_0 = (cv2.cvtColor(saliency_0,cv2.COLOR_GRAY2RGB)*255).astype(np.uint8)
-    saliency_1 = (cv2.cvtColor(saliency_1,cv2.COLOR_GRAY2RGB)*255).astype(np.uint8)
+    saliency = (cv2.cvtColor(saliency,cv2.COLOR_GRAY2RGB)*255).astype(np.uint8)
     alpha = 0.7
-    saliency_0 = cv2.addWeighted(saliency_0, alpha, state, 1 - alpha, 0)    # src1, src2, dst
-    saliency_1 = cv2.addWeighted(saliency_1, alpha, state, 1 - alpha, 0)    # src1, src2, dst
+    saliency = cv2.addWeighted(saliency, alpha, state, 1 - alpha, 0)    # src1, src2, dst
 
   else:
-    saliency_0 = np.expand_dims(saliency_0, axis=2)    #(210, 160, 1)
-    saliency_1 = np.expand_dims(saliency_1, axis=2)    #(210, 160, 1)
+    saliency = np.expand_dims(saliency, axis=2)    #(210, 160, 1)
     if args.mask:
-        saliency_0 = ((saliency_0>0.1) * state).astype(np.uint8)
-        saliency_1 = ((saliency_1>0.1) * state).astype(np.uint8)
+        saliency = ((saliency>0.1) * state).astype(np.uint8)
     else:
-        saliency_0 = (saliency_0*1.5 * state).astype(np.uint8)
-        saliency_1 = (saliency_1*1.5 * state).astype(np.uint8)
+        saliency = (saliency * 1.5 * state).astype(np.uint8)
   
   if args.channel == '':
       gap = (np.ones((img_h, 1, 3), 'float32')*255).astype(np.uint8)
       #saliency = np.concatenate((saliency_0, gap, saliency_1), 1)
-      saliency = saliency_0
       output = np.concatenate((state, gap, saliency), 1)
       
   elif args.channel == '0':
-      output = saliency_0
+      output = saliency
   elif args.channel == '1':
-      output = saliency_1
+      output = saliency
   
   if args.original:
     output = state
