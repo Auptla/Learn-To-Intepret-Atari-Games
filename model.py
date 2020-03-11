@@ -2,6 +2,7 @@ import math
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torch.autograd import grad
 
 
 # NoisyLinear layer
@@ -71,7 +72,7 @@ class DQN(nn.Module):
       q = F.log_softmax(q, dim=2)  # Log probabilities with action over second dimension
     else:
       q = F.softmax(q, dim=2)  # Probabilities with action over second dimension
-    return q
+    return q  
   
   def reset_noise(self):
     for name, module in self.named_children():
@@ -122,6 +123,7 @@ class DQN_rs(nn.Module):
       q = F.log_softmax(q, dim=2)  # Log probabilities with action over second dimension
     else:
       q = F.softmax(q, dim=2)  # Probabilities with action over second dimension
+                               # Equal to 'prob' layer (Softmax layer) in Zifan's code
     return q # shape: (-1, self.action_space, self.atoms)
   
   def reset_noise(self):

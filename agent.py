@@ -1,7 +1,9 @@
 import os
 import random
 import torch
+from torch.autograd import grad
 from torch import optim
+import numpy as np
 
 from model import DQN, DQN_rs, DQN_rs_sig
 
@@ -94,9 +96,51 @@ class Agent():
     self.online_net.zero_grad()
     return saliency_0, saliency_1
   
-  def get_saliency(self, state):
+  # TODO list:
+  # 1. Get intermediate result from model in torch
+  # 2. class_split (?) // not do this
+  # 3. Using torch.autograd to compute the gradients
+  # forward hook
+  def get_saliency(self, state, attribution_method, action_idx):
     state.requires_grad_()
     ((self.online_net(state.unsqueeze(0)) * self.support).sum(2).max(1)[0]).backward()
+
+    if attribution_method == 'IG':
+      # Implement IG
+      class_tensor = self.online_net(state.unsqueeze(0))
+      m = 20 # Computing steps
+      data = torch.zeros_like(state)
+      baseline = torch.zeros_like(state)
+      data.requires_grad_()
+      IGmap = torch.zeros_like(state)
+      for i in range(1, m+1):
+            data = (baseline + (i/m) * (state - baseline))
+            data.retain_grad()
+            ((self.online_net(data.unsqueeze(0)) * self.support).sum(2)[0][action_idx]).backward()
+            saliency = data.grad * (1 / m)
+            IGmap += saliency
+      return IGmap
+    elif attribution_method == 'SG':
+      # Implement SG
+      class_tensor = self.online_net(state.unsqueeze(0))
+      m = 20 # Computing steps
+      p = 0.2 # percentage of SmoothGrad
+      sigma = p * (torch.max(state) - torch.min(state))
+      data = torch.zeros_like(state)
+      baseline = torch.zeros_like(state)
+      data.requires_grad_()
+      SGmap = torch.zeros_like(state)
+      for i in range(1, m+1):
+            data = state + sigma * torch.randn(state.shape)
+            data.retain_grad()
+            ((self.online_net(data.unsqueeze(0)) * self.support).sum(2)[0][action_idx]).backward(retain_graph=True)
+            saliency = data.grad * (1 / m)
+            SGmap += saliency
+      return SGmap
+
+
+
+
     self.online_net.zero_grad()
     return state.grad
   

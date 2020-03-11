@@ -55,6 +55,7 @@ parser.add_argument('--channel', type=str, default='', help='0 or 1')
 parser.add_argument('--original', action='store_true', help='')
 parser.add_argument('--attribution-method', type=str, default='', help='IG, SG or other attribute method')
 parser.add_argument('--gaussian-noise', action='store_true', help='add gaussian noise to the saliency map')
+parser.add_argument('--action', type=int, default=0, help='0-4')
 
 # Setup
 args = parser.parse_args()
@@ -94,7 +95,7 @@ prefix = './visualize/'+args.game+'/'
 fourcc = cv2.VideoWriter_fourcc(*'XVID')
 
 if args.multiply and args.mask:
-    out = cv2.VideoWriter(prefix+args.game+'_'+args.model_type+'_'+args.folder+'_seed'+str(args.seed)+'_thresh'+str(args.saliency_thresh)+'_maskMultiply'+args.suffix+'.avi', fourcc, 10.,
+    out = cv2.VideoWriter(prefix+args.game+'_'+args.model_type+'_'+args.folder+'_seed'+str(args.seed)+'_thresh'+str(args.saliency_thresh)+'_maskMultiply_'+ args.attribution_method + '_action' + str(args.action) + args.suffix+'.avi', fourcc, 10.,
         (img_w*2+1*1, img_h), isColor=True)
         #(img_w*3+2*1, img_h), isColor=True)
     if args.channel == '0':
@@ -121,18 +122,15 @@ done = True
 
 if(args.attribution_method):
     print("The attribute method is:", args.attribution_method)
-print("No attribution specified!")
+else:   
+    print("No attribution specified!")
 
 while True:
   if done:
     state, reward_sum, done = env.reset(), 0, False
 
-
-
   action = dqn.act_e_greedy(state)  # Choose an action ε-greedily
-  saliency = dqn.get_saliency(state)
-
-
+  saliency = dqn.get_saliency(state, args.attribution_method, args.action)
 
   #print('raw state shape is {}'.format(state.shape)) # (4,84,84)
   #print('saliency shape is {}'.format(saliency.shape)) # (4,84,84)
@@ -141,7 +139,7 @@ while True:
     #print(saliency_0.max()) # 7.7252e-08
     #print('saliency shape is {}'.format(saliency.shape)) # (84, 84)
   else:
-    saliency = saliency[-1]
+    saliency = saliency[-1] 
   
   state = env.ale.getScreenRGB()[:, :, ::-1].astype(np.uint8)
   # ===========normalize saliency========
@@ -157,7 +155,7 @@ while True:
 
 
   if(args.gaussian_noise):
-      noise = 0.01 * (np.max(saliency) - np.min(saliency)) * np.random.standard_normal(size=saliency.shape) 
+      noise = 0.05 * (np.max(saliency) - np.min(saliency)) * np.random.standard_normal(size=saliency.shape) 
       saliency += noise
   
   if args.heatmap:
