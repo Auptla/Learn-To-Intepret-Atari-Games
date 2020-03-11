@@ -26,9 +26,9 @@ python main.py --evaluate --evaluation-episodes=200 --model='./results/ms_pacman
 
 ## Visualization
 Using Example:
-'''
+```
 python visualize.py --game='ms_pacman' --model='results/ms_pacman_DQN_rs_model.pth' --model-type='DQN_rs' --folder='results' --multiply --mask --seed=123 --attribution-method='SG' --action=3
-'''
+```
 
 
 ## Acknowledgement
