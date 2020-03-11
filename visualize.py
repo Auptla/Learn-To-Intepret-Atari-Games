@@ -95,9 +95,12 @@ prefix = './visualize/'+args.game+'/'
 fourcc = cv2.VideoWriter_fourcc(*'XVID')
 
 if args.multiply and args.mask:
-    out = cv2.VideoWriter(prefix+args.game+'_'+args.model_type+'_'+args.folder+'_seed'+str(args.seed)+'_thresh'+str(args.saliency_thresh)+'_maskMultiply_'+ args.attribution_method + '_action' + str(args.action) + args.suffix+'.avi', fourcc, 10.,
+    out = cv2.VideoWriter(prefix+args.game+'_'+args.model_type+'_'+args.folder+'_seed'+str(args.seed)+'_maskMultiply_'+ args.attribution_method + '_action' + str(args.action) + args.suffix+'.avi', fourcc, 10.,
         (img_w*2+1*1, img_h), isColor=True)
         #(img_w*3+2*1, img_h), isColor=True)
+    if args.heatmap:
+        out = cv2.VideoWriter(prefix+args.game+'_'+args.model_type+'_'+args.folder+'_seed'+str(args.seed)+'_maskMultiply_'+ args.attribution_method + '_action' + str(args.action) +'_heatmap' + args.suffix+'.avi', fourcc, 10.,
+        (img_w*2+1*1, img_h), isColor=True)
     if args.channel == '0':
         out = cv2.VideoWriter(prefix+args.game+'_'+args.model_type+'_'+args.folder+'_seed'+str(args.seed)+'_thresh'+str(args.saliency_thresh)+'_maskMultiply_0'+args.suffix+'.avi', fourcc, 8., (img_w, img_h), isColor=True)
     elif args.channel == '1':
@@ -163,7 +166,7 @@ while True:
     temp = np.zeros((img_h, img_w, 3),'float32')
     temp[:,:, 2] = saliency
     saliency = (temp*255).astype(np.uint8)
-    saliency += (saliency[:,:,2]==0)[:,:,np.newaxis] * state
+    #saliency += (saliency[:,:,2]==0)[:,:,np.newaxis]
     del temp
   
   elif not args.multiply:

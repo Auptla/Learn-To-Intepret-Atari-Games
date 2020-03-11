@@ -104,6 +104,7 @@ class Agent():
   def get_saliency(self, state, attribution_method, action_idx):
     state.requires_grad_()
     ((self.online_net(state.unsqueeze(0)) * self.support).sum(2).max(1)[0]).backward()
+    # (self.online_net(state.unsqueeze(0)) * self.support).sum(2) (1,9)
 
     if attribution_method == 'IG':
       # Implement IG
