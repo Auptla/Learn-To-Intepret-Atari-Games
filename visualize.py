@@ -96,11 +96,11 @@ fourcc = cv2.VideoWriter_fourcc(*'XVID')
 
 if args.multiply and args.mask:
     out = cv2.VideoWriter(prefix+args.game+'_'+args.model_type+'_'+args.folder+'_seed'+str(args.seed)+'_maskMultiply_'+ args.attribution_method + '_action' + str(args.action) + args.suffix+'.avi', fourcc, 10.,
-        (img_w*2+1*1, img_h), isColor=True)
-        #(img_w*3+2*1, img_h), isColor=True)
-    if args.heatmap:
-        out = cv2.VideoWriter(prefix+args.game+'_'+args.model_type+'_'+args.folder+'_seed'+str(args.seed)+'_maskMultiply_'+ args.attribution_method + '_action' + str(args.action) +'_heatmap' + args.suffix+'.avi', fourcc, 10.,
-        (img_w*2+1*1, img_h), isColor=True)
+        #(img_w*2+1*1, img_h), isColor=True)
+        (img_w*3+2*1, img_h*2+1*1), isColor=True)
+    #if args.heatmap:
+    #    out = cv2.VideoWriter(prefix+args.game+'_'+args.model_type+'_'+args.folder+'_seed'+str(args.seed)+'_maskMultiply_'+ args.attribution_method + '_action' + str(args.action) +'_heatmap' + args.suffix+'.avi', fourcc, 10.,
+    #    (img_w*2+1*1, img_h), isColor=True)
     if args.channel == '0':
         out = cv2.VideoWriter(prefix+args.game+'_'+args.model_type+'_'+args.folder+'_seed'+str(args.seed)+'_thresh'+str(args.saliency_thresh)+'_maskMultiply_0'+args.suffix+'.avi', fourcc, 8., (img_w, img_h), isColor=True)
     elif args.channel == '1':
@@ -128,81 +128,97 @@ if(args.attribution_method):
 else:   
     print("No attribution specified!")
 
-while True:
-  if done:
-    state, reward_sum, done = env.reset(), 0, False
+def getSaliencyMap(state, attribution_method, action, isheatmap):
+    saliency = dqn.get_saliency(state, attribution_method, action)
 
-  action = dqn.act_e_greedy(state)  # Choose an action ε-greedily
-  saliency = dqn.get_saliency(state, args.attribution_method, args.action)
-
-  #print('raw state shape is {}'.format(state.shape)) # (4,84,84)
-  #print('saliency shape is {}'.format(saliency.shape)) # (4,84,84)
-  if args.max:
-    saliency = torch.max(saliency, dim=0)[0]
-    #print(saliency_0.max()) # 7.7252e-08
-    #print('saliency shape is {}'.format(saliency.shape)) # (84, 84)
-  else:
-    saliency = saliency[-1] 
-  
-  state = env.ale.getScreenRGB()[:, :, ::-1].astype(np.uint8)
-  # ===========normalize saliency========
-  saliency = torch.abs(saliency)
-  saliency -= saliency.min()
-  
-  #print(saliency_0.max()) # 1.5421e-07, 0.
-  saliency /= torch.clamp(torch.max(saliency), min=1e-8)
-  saliency[saliency<args.saliency_thresh] = 0
-  saliency = saliency.data.cpu().numpy().astype(np.float32)
-  
-  saliency = cv2.resize(saliency, (img_w,img_h), cv2.INTER_CUBIC) #INTER_LINEAR, LANCZOS4: 8X8
-
-
-  if(args.gaussian_noise):
-      noise = 0.05 * (np.max(saliency) - np.min(saliency)) * np.random.standard_normal(size=saliency.shape) 
-      saliency += noise
-  
-  if args.heatmap:
-    #(210,160,3)
-    temp = np.zeros((img_h, img_w, 3),'float32')
-    temp[:,:, 2] = saliency
-    saliency = (temp*255).astype(np.uint8)
-    #saliency += (saliency[:,:,2]==0)[:,:,np.newaxis]
-    del temp
-  
-  elif not args.multiply:
-    saliency = (cv2.cvtColor(saliency,cv2.COLOR_GRAY2RGB)*255).astype(np.uint8)
-    alpha = 0.7
-    saliency = cv2.addWeighted(saliency, alpha, state, 1 - alpha, 0)    # src1, src2, dst
-
-  else:
-    saliency = np.expand_dims(saliency, axis=2)    #(210, 160, 1)
-    if args.mask:
-        saliency = ((saliency>0.1) * state).astype(np.uint8)
+    #print('raw state shape is {}'.format(state.shape)) # (4,84,84)
+    #print('saliency shape is {}'.format(saliency.shape)) # (4,84,84)
+    if args.max:
+        saliency = torch.max(saliency, dim=0)[0]
+        #print(saliency_0.max()) # 7.7252e-08
+        #print('saliency shape is {}'.format(saliency.shape)) # (84, 84)
     else:
-        saliency = (saliency * 1.5 * state).astype(np.uint8)
+        saliency = saliency[-1] 
+    
+    state = env.ale.getScreenRGB()[:, :, ::-1].astype(np.uint8)
+    # ===========normalize saliency========
+    saliency = torch.abs(saliency)
+    saliency -= saliency.min()
+    
+    #print(saliency_0.max()) # 1.5421e-07, 0.
+    saliency /= torch.clamp(torch.max(saliency), min=1e-8)
+    saliency[saliency<args.saliency_thresh] = 0
+    saliency = saliency.data.cpu().numpy().astype(np.float32)
+    
+    saliency = cv2.resize(saliency, (img_w,img_h), cv2.INTER_CUBIC) #INTER_LINEAR, LANCZOS4: 8X8
+
+
+    if(args.gaussian_noise):
+        noise = 0.05 * (np.max(saliency) - np.min(saliency)) * np.random.standard_normal(size=saliency.shape) 
+        saliency += noise
+    
+    if (isheatmap):
+        #(210,160,3)
+        temp = np.zeros((img_h, img_w, 3),'float32')
+        temp[:,:, 2] = saliency
+        saliency = (temp*255).astype(np.uint8)
+        return saliency
+        #saliency += (saliency[:,:,2]==0)[:,:,np.newaxis]
+        del temp
+    elif not args.multiply:
+        saliency = (cv2.cvtColor(saliency,cv2.COLOR_GRAY2RGB)*255).astype(np.uint8)
+        alpha = 0.7
+        saliency = cv2.addWeighted(saliency, alpha, state, 1 - alpha, 0)    # src1, src2, dst
+    else:
+        saliency = np.expand_dims(saliency, axis=2)    #(210, 160, 1)
+        if args.mask:
+            saliency = ((saliency>0.1) * state).astype(np.uint8)
+        else:
+            saliency = (saliency * 1.5 * state).astype(np.uint8)
+    return saliency
+
+count=0
+while True:
+    if done:
+        state, reward_sum, done = env.reset(), 0, False
+
+    count += 1
+    if count == 200:
+        np.save('state200.npy', state)
+
+    action = dqn.act_e_greedy(state)  # Choose an action ε-greedily
+
+    saliency0 = getSaliencyMap(state, 'SG', 0, isheatmap = True)
+    saliency1 = getSaliencyMap(state, 'SG', 1, isheatmap = True)
+    saliency2 = getSaliencyMap(state, 'SG', 2, isheatmap = True)
+    saliency3 = getSaliencyMap(state, 'SG', 3, isheatmap = True)
+    saliency4 = getSaliencyMap(state, 'SG', 4, isheatmap = True)
+    state = env.ale.getScreenRGB()[:, :, ::-1].astype(np.uint8)
   
-  if args.channel == '':
-      gap = (np.ones((img_h, 1, 3), 'float32')*255).astype(np.uint8)
-      #saliency = np.concatenate((saliency_0, gap, saliency_1), 1)
-      output = np.concatenate((state, gap, saliency), 1)
+    if args.channel == '':
+        gap = (np.ones((img_h, 1, 3), 'float32')*255).astype(np.uint8)
+        cross_gap = (np.ones((1, img_w * 3 + 2 * 1, 3), 'float32')*255).astype(np.uint8)
+        up = np.concatenate((state, gap, saliency0, gap, saliency1), 1)
+        down = np.concatenate((saliency2, gap, saliency3, gap, saliency4), 1)
+        output = np.concatenate((up, cross_gap, down), 0)
       
-  elif args.channel == '0':
-      output = saliency
-  elif args.channel == '1':
-      output = saliency
+  #elif args.channel == '0':
+  #    output = saliency
+  #elif args.channel == '1':
+  #    output = saliency
   
-  if args.original:
-    output = state
+    if args.original:
+        output = state
   
-  out.write(output) # Write out frame to video np.uint8(output)
+    out.write(output) # Write out frame to video np.uint8(output)
   
-  state, reward, done = env.step(action)  # Step
-  reward_sum += reward
-  #if args.render:
-  #  env.render()
+    state, reward, done = env.step(action)  # Step
+    reward_sum += reward
+    #if args.render:
+    #  env.render()
   
-  if done:
-    break
+    if done:
+        break
 
 env.close()
 out.release()

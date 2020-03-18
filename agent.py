@@ -125,7 +125,7 @@ class Agent():
       # Implement SG
       class_tensor = self.online_net(state.unsqueeze(0))
       m = 20 # Computing steps
-      p = 0.2 # percentage of SmoothGrad
+      p = 0.1 # percentage of SmoothGrad
       sigma = p * (torch.max(state) - torch.min(state))
       data = torch.zeros_like(state)
       baseline = torch.zeros_like(state)
