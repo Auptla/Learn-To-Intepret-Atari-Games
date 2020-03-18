@@ -101,7 +101,7 @@ class Agent():
   # 2. class_split (?) // not do this
   # 3. Using torch.autograd to compute the gradients
   # forward hook
-  def get_saliency(self, state, attribution_method, action_idx):
+  def get_saliency(self, state, attribution_method, action_idx, optim=False):
     state.requires_grad_()
     ((self.online_net(state.unsqueeze(0)) * self.support).sum(2).max(1)[0]).backward()
     # (self.online_net(state.unsqueeze(0)) * self.support).sum(2) (1,9)
@@ -117,7 +117,10 @@ class Agent():
       for i in range(1, m+1):
             data = (baseline + (i/m) * (state - baseline))
             data.retain_grad()
-            ((self.online_net(data.unsqueeze(0)) * self.support).sum(2)[0][action_idx]).backward()
+            if optim:
+              ((self.online_net(data.unsqueeze(0)) * self.support).sum(2).max(1)[0]).backward()
+            else:
+              ((self.online_net(data.unsqueeze(0)) * self.support).sum(2)[0][action_idx]).backward()
             saliency = data.grad * (1 / m)
             IGmap += saliency
       return IGmap
@@ -134,7 +137,10 @@ class Agent():
       for i in range(1, m+1):
             data = state + sigma * torch.randn(state.shape)
             data.retain_grad()
-            ((self.online_net(data.unsqueeze(0)) * self.support).sum(2)[0][action_idx]).backward(retain_graph=True)
+            if optim:
+              ((self.online_net(data.unsqueeze(0)) * self.support).sum(2).max(1)[0]).backward(retain_graph=True)  
+            else:
+              ((self.online_net(data.unsqueeze(0)) * self.support).sum(2)[0][action_idx]).backward(retain_graph=True)
             saliency = data.grad * (1 / m)
             SGmap += saliency
       return SGmap

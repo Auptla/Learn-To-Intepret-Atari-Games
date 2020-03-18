@@ -128,8 +128,8 @@ if(args.attribution_method):
 else:   
     print("No attribution specified!")
 
-def getSaliencyMap(state, attribution_method, action, isheatmap):
-    saliency = dqn.get_saliency(state, attribution_method, action)
+def getSaliencyMap(state, attribution_method, action, isheatmap, optim=False):
+    saliency = dqn.get_saliency(state, attribution_method, action, optim)
 
     #print('raw state shape is {}'.format(state.shape)) # (4,84,84)
     #print('saliency shape is {}'.format(saliency.shape)) # (4,84,84)
@@ -188,11 +188,11 @@ while True:
 
     action = dqn.act_e_greedy(state)  # Choose an action ε-greedily
 
-    saliency0 = getSaliencyMap(state, 'SG', 0, isheatmap = True)
-    saliency1 = getSaliencyMap(state, 'SG', 1, isheatmap = True)
-    saliency2 = getSaliencyMap(state, 'SG', 2, isheatmap = True)
-    saliency3 = getSaliencyMap(state, 'SG', 3, isheatmap = True)
-    saliency4 = getSaliencyMap(state, 'SG', 4, isheatmap = True)
+    saliency0 = getSaliencyMap(state, 'IG', 0, isheatmap = False, optim=True)
+    saliency1 = getSaliencyMap(state, 'IG', 1, isheatmap = False)
+    saliency2 = getSaliencyMap(state, 'IG', 2, isheatmap = False)
+    saliency3 = getSaliencyMap(state, 'IG', 3, isheatmap = False)
+    saliency4 = getSaliencyMap(state, 'IG', 4, isheatmap = False)
     state = env.ale.getScreenRGB()[:, :, ::-1].astype(np.uint8)
   
     if args.channel == '':
