@@ -144,6 +144,21 @@ class Agent():
             saliency = data.grad * (1 / m)
             SGmap += saliency
       return SGmap
+    elif attribution_method == 'GramCAM':
+      class_tensor = self.online_net(state.unsqueeze(0))
+      data = torch.zeros_like(state)
+      data.requires_grad_()
+      if optim:
+        ((self.online_net(data.unsqueeze(0)) * self.support).sum(2).max(1)[0]).backward(retain_graph=True)
+      else:
+        ((self.online_net(data.unsqueeze(0)) * self.support).sum(2)[0][action_idx]).backward(retain_graph=True)
+      saliency_map = data.grad
+
+      weight = np.sum(saliency_map)
+      weight /= np.sum(weight)
+      GradCAM = np.dot(saliency_map, weight)
+      GradCAM = np.maximum(np.zeros_like(temp), temp).reshape(state.shape)
+      return GradCAM
 
 
 

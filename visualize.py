@@ -97,7 +97,7 @@ fourcc = cv2.VideoWriter_fourcc(*'XVID')
 if args.multiply and args.mask:
     out = cv2.VideoWriter(prefix+args.game+'_'+args.model_type+'_'+args.folder+'_seed'+str(args.seed)+'_maskMultiply_'+ args.attribution_method + '_action' + str(args.action) + args.suffix+'.avi', fourcc, 10.,
         #(img_w*2+1*1, img_h), isColor=True)
-        (img_w*3+2*1, img_h*2+1*1), isColor=True)
+        (img_w*2+1*1, img_h*2+1*1), isColor=True)
     #if args.heatmap:
     #    out = cv2.VideoWriter(prefix+args.game+'_'+args.model_type+'_'+args.folder+'_seed'+str(args.seed)+'_maskMultiply_'+ args.attribution_method + '_action' + str(args.action) +'_heatmap' + args.suffix+'.avi', fourcc, 10.,
     #    (img_w*2+1*1, img_h), isColor=True)
@@ -188,18 +188,17 @@ while True:
 
     action = dqn.act_e_greedy(state)  # Choose an action ε-greedily
 
-    saliency0 = getSaliencyMap(state, 'IG', 0, isheatmap = False, optim=True)
-    saliency1 = getSaliencyMap(state, 'IG', 1, isheatmap = False)
-    saliency2 = getSaliencyMap(state, 'IG', 2, isheatmap = False)
-    saliency3 = getSaliencyMap(state, 'IG', 3, isheatmap = False)
-    saliency4 = getSaliencyMap(state, 'IG', 4, isheatmap = False)
+    saliency0 = getSaliencyMap(state, 'IG', 0, isheatmap = True, optim=True)
+    saliency1 = getSaliencyMap(state, 'SG', 0, isheatmap = True, optim=True)
+    saliency2 = getSaliencyMap(state, 'GradCAM', 0, isheatmap = True, optim=True)
+
     state = env.ale.getScreenRGB()[:, :, ::-1].astype(np.uint8)
   
     if args.channel == '':
         gap = (np.ones((img_h, 1, 3), 'float32')*255).astype(np.uint8)
-        cross_gap = (np.ones((1, img_w * 3 + 2 * 1, 3), 'float32')*255).astype(np.uint8)
-        up = np.concatenate((state, gap, saliency0, gap, saliency1), 1)
-        down = np.concatenate((saliency2, gap, saliency3, gap, saliency4), 1)
+        cross_gap = (np.ones((1, img_w * 2 + 1 * 1, 3), 'float32')*255).astype(np.uint8)
+        up = np.concatenate((state, gap, saliency0), 1)
+        down = np.concatenate((saliency1, gap, saliency2), 1)
         output = np.concatenate((up, cross_gap, down), 0)
       
   #elif args.channel == '0':
