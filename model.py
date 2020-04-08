@@ -114,7 +114,7 @@ class DQN_rs(nn.Module):
     x2 = x * weights[:, 1:, :, :]
     x = x1 + x2
     
-    x = x.view(-1, 3136)
+    x = x.reshape(-1, 3136)
     v = self.fc_z_v(F.relu(self.fc_h_v(x)))  # Value stream
     a = self.fc_z_a(F.relu(self.fc_h_a(x)))  # Advantage stream
     v, a = v.view(-1, 1, self.atoms), a.view(-1, self.action_space, self.atoms)

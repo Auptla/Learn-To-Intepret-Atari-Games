@@ -4,6 +4,16 @@ import torch
 from torch.autograd import grad
 from torch import optim
 import numpy as np
+from captum.attr import (
+    GradientShap,
+    DeepLift,
+    DeepLiftShap,
+    IntegratedGradients,
+    LayerConductance,
+    NeuronConductance,
+    NoiseTunnel,
+    GuidedGradCam
+)
 
 from model import DQN, DQN_rs, DQN_rs_sig
 
@@ -101,64 +111,55 @@ class Agent():
   # 2. class_split (?) // not do this
   # 3. Using torch.autograd to compute the gradients
   # forward hook
-  def get_saliency(self, state, attribution_method, action_idx, optim=False):
+  def get_saliency(self, state, attribution_method, action_idx):
     state.requires_grad_()
     ((self.online_net(state.unsqueeze(0)) * self.support).sum(2).max(1)[0]).backward()
     # (self.online_net(state.unsqueeze(0)) * self.support).sum(2) (1,9)
 
-    if attribution_method == 'IG':
-      # Implement IG
-      class_tensor = self.online_net(state.unsqueeze(0))
-      m = 20 # Computing steps
-      data = torch.zeros_like(state)
-      baseline = torch.zeros_like(state)
-      data.requires_grad_()
-      IGmap = torch.zeros_like(state)
-      for i in range(1, m+1):
-            data = (baseline + (i/m) * (state - baseline))
-            data.retain_grad()
-            if optim:
-              ((self.online_net(data.unsqueeze(0)) * self.support).sum(2).max(1)[0]).backward()
-            else:
-              ((self.online_net(data.unsqueeze(0)) * self.support).sum(2)[0][action_idx]).backward()
-            saliency = data.grad * (1 / m)
-            IGmap += saliency
-      return IGmap
-    elif attribution_method == 'SG':
-      # Implement SG
-      class_tensor = self.online_net(state.unsqueeze(0))
-      m = 20 # Computing steps
-      p = 0.1 # percentage of SmoothGrad
-      sigma = p * (torch.max(state) - torch.min(state))
-      data = torch.zeros_like(state)
-      baseline = torch.zeros_like(state)
-      data.requires_grad_()
-      SGmap = torch.zeros_like(state)
-      for i in range(1, m+1):
-            data = state + sigma * torch.randn(state.shape)
-            data.retain_grad()
-            if optim:
-              ((self.online_net(data.unsqueeze(0)) * self.support).sum(2).max(1)[0]).backward(retain_graph=True)  
-            else:
-              ((self.online_net(data.unsqueeze(0)) * self.support).sum(2)[0][action_idx]).backward(retain_graph=True)
-            saliency = data.grad * (1 / m)
-            SGmap += saliency
-      return SGmap
-    elif attribution_method == 'GramCAM':
-      class_tensor = self.online_net(state.unsqueeze(0))
-      data = torch.zeros_like(state)
-      data.requires_grad_()
-      if optim:
-        ((self.online_net(data.unsqueeze(0)) * self.support).sum(2).max(1)[0]).backward(retain_graph=True)
-      else:
-        ((self.online_net(data.unsqueeze(0)) * self.support).sum(2)[0][action_idx]).backward(retain_graph=True)
-      saliency_map = data.grad
 
-      weight = np.sum(saliency_map)
-      weight /= np.sum(weight)
-      GradCAM = np.dot(saliency_map, weight)
-      GradCAM = np.maximum(np.zeros_like(temp), temp).reshape(state.shape)
-      return GradCAM
+    if attribution_method == 'IG':
+        ig = IntegratedGradients(self.online_net)
+        data = state.unsqueeze(0) 
+        attribution = torch.zeros_like(state)
+        for i in range(51):
+          attribution += ig.attribute(data, n_steps=10, target=(action_idx,i))[0]
+        self.online_net.zero_grad()
+        return attribution
+    elif attribution_method == 'SG':
+        ig = IntegratedGradients(self.online_net)
+        nt = NoiseTunnel(ig)
+        data = state.unsqueeze(0) # output [1,9,51]
+        attribution = torch.zeros_like(state)
+        for i in range(51):
+            attribution += nt.attribute(data, nt_type='smoothgrad', stdevs=0.02, n_samples=1, target=(action_idx, i))[0]
+        self.online_net.zero_grad()
+        return attribution
+    elif attribution_method == 'GradCAM':
+        guided_gc = GuidedGradCam(self.online_net, self.online_net.conv3)
+        data = state.unsqueeze(0) # output [1,9,51]
+        attribution = torch.zeros_like(state)
+        for i in range(51):
+            attribution += guided_gc.attribute(data, target = (action_idx,i))[0]
+        self.online_net.zero_grad()
+        return attribution
+    elif attribution_method == 'Deeplift':
+        deeplift = DeepLift(self.online_net)
+        data = state.unsqueeze(0) # output [1,9,51]
+        attribution = torch.zeros_like(state)
+        for i in range(51):
+            attribution += deeplift.attribute(data, target = (action_idx,i))[0]
+        self.online_net.zero_grad()
+        return attribution
+    elif attribution_method == 'GradientShap':
+        grad_sp = GradientShap(self.online_net)
+        data = state.unsqueeze(0) # output [1,9,51]
+        attribution = torch.zeros_like(state)
+        baseline = torch.randn(10,4,84,84)  # 10 * number of sample
+        for i in range(51):
+            attribution += grad_sp.attribute(data, baseline, target = (action_idx,i))[0]
+        self.online_net.zero_grad()
+        return attribution
+
 
 
 

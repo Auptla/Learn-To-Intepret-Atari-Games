@@ -8,6 +8,9 @@ from env import Env
 from memory import ReplayMemory
 from test import test
 import seaborn; seaborn.set()
+import os
+
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 import cv2
 import numpy as np
@@ -97,7 +100,7 @@ fourcc = cv2.VideoWriter_fourcc(*'XVID')
 if args.multiply and args.mask:
     out = cv2.VideoWriter(prefix+args.game+'_'+args.model_type+'_'+args.folder+'_seed'+str(args.seed)+'_maskMultiply_'+ args.attribution_method + '_action' + str(args.action) + args.suffix+'.avi', fourcc, 10.,
         #(img_w*2+1*1, img_h), isColor=True)
-        (img_w*2+1*1, img_h*2+1*1), isColor=True)
+        (img_w*3+2*1, img_h*2+1*1), isColor=True)
     #if args.heatmap:
     #    out = cv2.VideoWriter(prefix+args.game+'_'+args.model_type+'_'+args.folder+'_seed'+str(args.seed)+'_maskMultiply_'+ args.attribution_method + '_action' + str(args.action) +'_heatmap' + args.suffix+'.avi', fourcc, 10.,
     #    (img_w*2+1*1, img_h), isColor=True)
@@ -128,8 +131,8 @@ if(args.attribution_method):
 else:   
     print("No attribution specified!")
 
-def getSaliencyMap(state, attribution_method, action, isheatmap, optim=False):
-    saliency = dqn.get_saliency(state, attribution_method, action, optim)
+def getSaliencyMap(state, attribution_method, action, isheatmap, threshold=0.1):
+    saliency = dqn.get_saliency(state, attribution_method, action)
 
     #print('raw state shape is {}'.format(state.shape)) # (4,84,84)
     #print('saliency shape is {}'.format(saliency.shape)) # (4,84,84)
@@ -172,7 +175,7 @@ def getSaliencyMap(state, attribution_method, action, isheatmap, optim=False):
     else:
         saliency = np.expand_dims(saliency, axis=2)    #(210, 160, 1)
         if args.mask:
-            saliency = ((saliency>0.1) * state).astype(np.uint8)
+            saliency = ((saliency>threshold) * state).astype(np.uint8)
         else:
             saliency = (saliency * 1.5 * state).astype(np.uint8)
     return saliency
@@ -183,22 +186,26 @@ while True:
         state, reward_sum, done = env.reset(), 0, False
 
     count += 1
-    if count == 200:
-        np.save('state200.npy', state)
+    if(count==200):
+        break
 
     action = dqn.act_e_greedy(state)  # Choose an action ε-greedily
 
-    saliency0 = getSaliencyMap(state, 'IG', 0, isheatmap = True, optim=True)
-    saliency1 = getSaliencyMap(state, 'SG', 0, isheatmap = True, optim=True)
-    saliency2 = getSaliencyMap(state, 'GradCAM', 0, isheatmap = True, optim=True)
+    isheatmap = False
+
+    saliency0 = getSaliencyMap(state, 'IG', 2, isheatmap = isheatmap, threshold=0.06)
+    saliency1 = getSaliencyMap(state, 'SG', 2, isheatmap = isheatmap, threshold=0.1)
+    saliency2 = getSaliencyMap(state, 'GradCAM', 2, isheatmap = isheatmap, threshold=0.1)
+    saliency3 = getSaliencyMap(state, 'Deeplift', 2, isheatmap = isheatmap, threshold=0.1)
+    saliency4 = getSaliencyMap(state, 'GradientShap', 2, isheatmap = isheatmap, threshold=0.1)
 
     state = env.ale.getScreenRGB()[:, :, ::-1].astype(np.uint8)
   
     if args.channel == '':
         gap = (np.ones((img_h, 1, 3), 'float32')*255).astype(np.uint8)
-        cross_gap = (np.ones((1, img_w * 2 + 1 * 1, 3), 'float32')*255).astype(np.uint8)
-        up = np.concatenate((state, gap, saliency0), 1)
-        down = np.concatenate((saliency1, gap, saliency2), 1)
+        cross_gap = (np.ones((1, img_w * 3 + 2 * 1, 3), 'float32')*255).astype(np.uint8)
+        up = np.concatenate((state, gap, saliency0, gap, saliency1), 1)
+        down = np.concatenate((saliency2, gap, saliency3, gap, saliency4), 1)
         output = np.concatenate((up, cross_gap, down), 0)
       
   #elif args.channel == '0':
@@ -208,7 +215,8 @@ while True:
   
     if args.original:
         output = state
-  
+    
+    print("working...", count);
     out.write(output) # Write out frame to video np.uint8(output)
   
     state, reward, done = env.step(action)  # Step
